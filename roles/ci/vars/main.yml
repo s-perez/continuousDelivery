@@ -1,0 +1,18 @@
+projects:
+  - name: backend
+    role_name: backend
+    repository: git@github.com:kuraime/backend.git
+    requirements: requirements/test.txt
+    workdir: /srv/buildbot/slave/backend/test/backend
+    env:
+      DJANGO_SETTINGS_MODULE: backend.settings
+      DJANGO_CONFIGURATION: Test
+      PYTHONPATH: /srv/buildbot/slave/backend/build/backend
+
+js_projects:
+  - name: frontend
+    role_name: frontend
+    repository: git@github.com:kuraime/frontend.git
+    workdir: /srv/buildbot/slave/frontend/build
+    env:
+      CI: true

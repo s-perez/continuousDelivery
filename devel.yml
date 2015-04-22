@@ -1,0 +1,4 @@
+---
+# This file is for your testing purposes, so you don't have to edit site.yml
+- include: site.yml
+

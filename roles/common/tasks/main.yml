@@ -1,0 +1,5 @@
+
+- name: Update repos
+  apt: >
+      update_cache=yes
+

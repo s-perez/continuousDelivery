@@ -1,0 +1,7 @@
+# Inventory of all virtual machines
+
+ci ansible_ssh_host=192.168.168.10
+
+[devel:vars]
+ansible_ssh_user=vagrant
+# See group_vars/devel for more specific variables

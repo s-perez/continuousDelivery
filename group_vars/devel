@@ -1,0 +1,5 @@
+ansible_ssh_user: vagrant
+devel_env: true
+
+# vi: ft=yaml
+

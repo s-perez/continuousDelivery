@@ -1,0 +1,154 @@
+
+- name: Ensure sisekeom user does exist
+  user: >
+    name=sisekeom
+    home=/home/sisekeom
+    system=yes
+    shell=/bin/bash
+    state=present
+
+- name: Ensure buildbot and other depends are installed
+  apt: >
+    pkg={{ item }}
+    state=latest
+  with_items:
+    - buildbot
+    - buildbot-slave
+    - git
+    - nginx
+    - python-pip
+
+
+
+# BUILDBOT
+
+- name: Create directory for Buildbot
+  file: >
+    path=/srv/buildbot
+    state=directory
+    owner=buildbot
+    group=buildbot
+    mode=0755
+
+- name: Configure buildbot's SSH
+  file: >
+    path=/var/lib/buildbot/.ssh
+    state=directory
+    owner=buildbot
+    group=buildbot
+    mode=0700
+
+- name: Configure buildbot's known_hosts
+  copy: >
+    src=files/known_hosts
+    dest=/var/lib/buildbot/.ssh/known_hosts
+    owner=buildbot
+    group=buildbot
+    mode=0644
+
+- name: Install developers key for deploys
+  copy: >
+    src=keys/developers
+    dest=/var/lib/buildbot/.ssh/id_rsa
+    owner=buildbot
+    group=buildbot
+    mode=0400
+
+
+
+# BUILDMASTER
+
+- name: Create directory for buildmaster
+  sudo_user: buildbot
+  command: >
+    creates=/srv/buildbot/master
+    buildbot create-master /srv/buildbot/master
+
+- name: Configure buildmaster
+  template: >
+    src=master.cfg.j2
+    dest=/srv/buildbot/master/master.cfg
+    owner=buildbot
+    group=buildbot
+    mode=0644
+  notify: restart buildmaster
+
+- name: Configure buildmaster service
+  template: >
+    src=buildmaster.j2
+    dest=/etc/default/buildmaster
+    mode=0644
+  notify: restart buildmaster
+
+- name: Ensure buildmaster is enabled
+  service: >
+    name=buildmaster
+    state=started
+    enabled=yes
+  changed_when: False
+
+
+
+# BUILDSLAVE
+
+- name: Create directory for buildslave
+  sudo_user: buildbot
+  command: >
+    creates=/srv/buildbot/slave
+    buildslave create-slave /srv/buildbot/slave localhost:9989 example-slave pass
+
+- name: Add info about the slave
+  copy: >
+    src={{ item }}
+    dest=/srv/buildbot/slave/info/{{ item }}
+    owner=buildbot group=buildbot
+  with_items:
+    - admin
+    - host
+
+- name: Configure buildmaster
+  template: >
+    src=slave.tac.j2
+    dest=/srv/buildbot/slave/buildbot.tac
+    owner=buildbot
+    group=buildbot
+    mode=0600
+  notify: restart buildslave
+
+- name: Configure buildslave service
+  template: >
+    src=buildslave.j2
+    dest=/etc/default/buildslave
+    mode=0644
+  notify: restart buildslave
+
+- name: Ensure buildslave is enabled
+  service: >
+    name=buildslave
+    enabled=yes
+  notify: restart buildslave
+
+
+
+# CONFIGURE FOR DEPLOYMENT
+
+- name: Ensure ansible is installed
+  pip: >
+    name=ansible
+    state=latest
+  tags:
+    - packages
+
+- name: Add deploy SSH key
+  copy: >
+    src=keys/deploy
+    dest=/var/lib/buildbot/.ssh/deploy
+    owner=buildbot
+    group=buildbot
+    mode=0400
+
+- name: Get ci
+  sudo_user: buildbot
+  git: >
+    repo=git@github.com:kuraime/continuousDelivery.git
+    dest=/srv/buildbot/ci
