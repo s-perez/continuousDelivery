@@ -1,8 +1,8 @@
 
-- name: Ensure sisekeom user does exist
+- name: Ensure tfm user does exist
   user: >
-    name=sisekeom
-    home=/home/sisekeom
+    name=tfm
+    home=/home/tfm
     system=yes
     shell=/bin/bash
     state=present
