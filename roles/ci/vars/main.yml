@@ -6,7 +6,6 @@ projects:
     workdir: /srv/buildbot/slave/backend/test/backend
     env:
       DJANGO_SETTINGS_MODULE: backend.settings
-      DJANGO_CONFIGURATION: Test
       PYTHONPATH: /srv/buildbot/slave/backend/build/backend
 
 js_projects:
