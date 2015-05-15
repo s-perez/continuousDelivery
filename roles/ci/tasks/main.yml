@@ -18,6 +18,19 @@
     - nginx
     - python-pip
 
+- name: Configure site for documentation
+  template: >
+    src=nginx.j2
+    dest=/etc/nginx/sites-available/default
+    mode=0644
+  notify: restart nginx
+
+- name: httpasswd file
+  copy: >
+    src=httpasswd
+    dest=/etc/nginx/httpasswd
+    mode=0644
+  notify: restart nginx
 
 
 # BUILDBOT
@@ -55,7 +68,21 @@
     mode=0400
 
 
+- name: Install developers key for deploys
+  copy: >
+    src=keys/backend
+    dest=/var/lib/buildbot/.ssh/back
+    owner=buildbot
+    group=buildbot
+    mode=0400
 
+- name: Install developers key for deploys
+  copy: >
+    src=keys/frontend
+    dest=/var/lib/buildbot/.ssh/front
+    owner=buildbot
+    group=buildbot
+    mode=0400
 # BUILDMASTER
 
 - name: Create directory for buildmaster

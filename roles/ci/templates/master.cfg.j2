@@ -1,0 +1,275 @@
+# -*- python -*-
+# ex: set syntax=python:
+# {{ ansible_managed }}
+
+# This is a sample buildmaster config file. It must be installed as
+# 'master.cfg' in your buildmaster's base directory.
+
+# This is the dictionary that the buildmaster pays attention to. We also use
+# a shorter alias to save typing.
+c = BuildmasterConfig = {}
+
+####### BUILDSLAVES
+
+# The 'slaves' list defines the set of recognized buildslaves. Each element is
+# a BuildSlave object, specifying a unique slave name and password.  The same
+# slave name and password must be configured on the slave.
+from buildbot.buildslave import BuildSlave
+c['slaves'] = [BuildSlave('slave', 'pass')]
+
+# 'slavePortnum' defines the TCP port to listen on for connections from slaves.
+# This must match the value configured into the buildslaves (with their
+# --master option)
+c['slavePortnum'] = 9989
+
+####### CHANGESOURCES
+
+# the 'change_source' setting tells the buildmaster how it should find out
+# about source code changes.  Here we point to the buildbot clone of pyflakes.
+
+from buildbot.changes.gitpoller import GitPoller
+
+{% for p in projects + js_projects %}
+{{ p.name }} = GitPoller(
+    '{{ p.repository }}',
+    workdir='gitpoller-{{ p.name }}',
+    branch='master',
+    project='{{ p.name }}',
+    pollinterval=15*60)
+{% endfor %}
+
+c['change_source'] = [{% for p in projects + js_projects %}{{ p.name }},{% endfor %}]
+
+####### SCHEDULERS
+
+# Configure the Schedulers, which decide how to react to incoming changes. In this
+# case, just kick off a 'runtests' build
+
+from buildbot.schedulers.basic import SingleBranchScheduler
+from buildbot.schedulers.forcesched import ForceScheduler
+from buildbot.changes import filter
+
+c['schedulers'] = []
+
+{% for p in projects + js_projects %}
+c['schedulers'].append(
+    SingleBranchScheduler(
+        name='{{ p.name }}_master',
+        change_filter=filter.ChangeFilter(branch='master', project='{{ p.name }}'),
+        treeStableTimer=10*60,
+        builderNames=['{{ p.name }}']
+    )
+)
+c['schedulers'].append(
+    ForceScheduler(
+        name='{{ p.name }}_force',
+        builderNames=['{{ p.name }}']
+    )
+)
+
+{% endfor %}
+
+####### BUILDERS
+
+# The 'builders' list defines the Builders, which tell Buildbot how to perform a build:
+# what steps, and which slaves can execute them.  Note that any particular build will
+# only take place on one slave.
+
+from buildbot.process.factory import BuildFactory
+from buildbot.steps.python_twisted import RemovePYCs
+from buildbot.steps.shell import ShellCommand
+from buildbot.steps.slave import CopyDirectory, RemoveDirectory
+from buildbot.steps.source.git import Git
+
+
+{% for p in projects %}
+
+#------ PROJECT: {{ p.name }}
+{{ p.name }}_env = {
+    'VIRTUAL_ENV': '/srv/buildbot/slave/venv_{{ p.name }}',
+    'PATH': '/srv/buildbot/slave/venv_{{ p.name }}/bin:${PATH}',
+{% if p.env is defined %}
+    {% for k, v in p.env.items() %}
+    '{{ k }}': '{{ v }}',
+    {% endfor %}
+{% endif %}
+}
+
+{{ p.name }}_factory = BuildFactory()
+{{ p.name }}_factory.addSteps([
+    Git(
+        repourl='{{ p.repository }}',
+    ),
+    ShellCommand(
+        name='pip',
+        description='Update requirements',
+        env={{ p.name }}_env,
+        command=[
+            'pip',
+            'install',
+            '-r',
+            '{{ p.requirements|default("requirements.txt") }}'
+        ],
+        haltOnFailure=True,
+    ),
+    RemovePYCs(name='pyclean'),
+    ShellCommand(
+        name='py.test',
+        description='Run tests',
+        {% if p.workdir is defined %}
+        workdir='{{ p.workdir }}',
+        {% endif %}
+        env={{ p.name }}_env,
+        command=['py.test'],
+        haltOnFailure=True,
+    ),
+    ShellCommand(
+        name='deploy',
+        description='Deploy to stage',
+        workdir='/srv/buildbot/bender',
+        command=[
+            'ansible-playbook',
+            '--private-key=/var/lib/buildbot/.ssh/deploy',
+            '--limit={{ p.role_name|default(p.name) }}',
+            '-s',
+            '-f',
+            '1',
+            '--inventory-file=raspberry.yml',
+            'deploy.yml'
+        ],
+        haltOnFailure=True,
+    ),
+])
+{% endfor %}
+
+
+####### JS BUILDERS
+
+
+{% for p in js_projects %}
+
+#------ PROJECT: {{ p.name }}
+
+{{ p.name }}_factory = BuildFactory()
+{{ p.name }}_factory.addSteps([
+
+    Git(
+        repourl='{{ p.repository }}',
+    ),
+    ShellCommand(
+        name='npm',
+        description='Update requirements',
+        command=[
+            'npm',
+            'install',
+        ],
+        haltOnFailure=True,
+    ),
+    ShellCommand(
+        name='bower',
+        description='Update requirements',
+        command=[
+            'bower',
+            'install',
+        ],
+        haltOnFailure=True,
+    ),
+    ShellCommand(
+        name='lint',
+        description='Lint project',
+        command=['grunt',
+                 'lint'
+        ],
+        haltOnFailure=True,
+    ),
+    ShellCommand(
+        name='build',
+        description='Build project',
+        command=['grunt',
+                 'build'
+        ],
+        haltOnFailure=True,
+    ),
+    ShellCommand(
+        name='test',
+        description='Run tests',
+        command=['grunt',
+                 'test'
+        ],
+        haltOnFailure=True,
+    ),
+    ShellCommand(
+        name='deploy',
+        description='Deploy to stage',
+        command=[
+            'grunt',
+            'deploy'
+        ],
+        haltOnFailure=True,
+    ),
+])
+{% endfor %}
+
+from buildbot.config import BuilderConfig
+
+c['builders'] = []
+
+{% for p in projects + js_projects %}
+c['builders'].append(
+    BuilderConfig(
+        name="{{ p.name }}",
+        slavenames=["slave"],
+        factory={{ p.name}}_factory
+    )
+)
+{% endfor %}
+
+####### STATUS TARGETS
+
+# 'status' is a list of Status Targets. The results of each build will be
+# pushed to these targets. buildbot/status/*.py has a variety to choose from,
+# including web pages, email senders, and IRC bots.
+
+c['status'] = []
+
+from buildbot.status import html
+from buildbot.status.web import authz
+authz_cfg=authz.Authz(
+    # change any of these to True to enable; see the manual for more
+    # options
+    gracefulShutdown = False,
+    forceBuild = True, # use this to test your slave once it is set up
+    forceAllBuilds = False,
+    pingBuilder = False,
+    stopBuild = False,
+    stopAllBuilds = False,
+    cancelPendingBuild = False,
+)
+c['status'].append(html.WebStatus(http_port="tcp:8010:interface=127.0.0.1",
+                                  authz=authz_cfg,
+                                  change_hook_dialects={ 'github' : True }))
+
+####### PROJECT IDENTITY
+
+# the 'title' string will appear at the top of this buildbot
+# installation's html.WebStatus home page (linked to the
+# 'titleURL') and is embedded in the title of the waterfall HTML page.
+
+c['title'] = "Breaking news"
+c['titleURL'] = "http://www.breakingnews.com/"
+
+# the 'buildbotURL' string should point to the location where the buildbot's
+# internal web server (usually the html.WebStatus page) is visible. This
+# typically uses the port number set in the Waterfall 'status' entry, but
+# with an externally-visible host name which the buildbot cannot figure out
+# without some help.
+
+c['buildbotURL'] = "https://ci.breakingnews.net/"
+
+####### DB URL
+
+c['db'] = {
+    # This specifies what database buildbot uses to store its state.  You can leave
+    # this at its default for all but the largest installations.
+    'db_url' : "sqlite:///state.sqlite",
+}
