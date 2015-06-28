@@ -1,0 +1,47 @@
+- name: Install common dependencies
+  apt:
+    pkg: "{{ item }}"
+  with_items:
+    - binutils
+    - git
+    - libpq-dev
+    - libproj-dev
+    - nginx
+    - python-virtualenv
+    - python3
+    - python3-pip
+
+- name: Get backend
+  git:
+    repo: git@github.com/kuraime/backend.git
+    dest: /srv/backend/src
+    accept_hostkey: yes
+  sudo_user: backend
+
+- name: Update pip requirements
+  pip:
+    requirements: /srv/backend/src/requirements.txt
+  sudo_user: backend
+
+- name: Run migrates
+  run_once: true
+  environment: env
+  django_manage:
+    app_path: /srv/backend/src
+    command: migrate
+  sudo_user: backend
+
+- name: Collect static files
+  environment: env
+  django_manage:
+    app_path: /srv/backend/src
+    command: collectstatic
+  sudo_user: backend
+
+- name: Create uWSGI configuration
+  template: >
+    src=backend.uwsgi.j2
+    dest=/srv/backend/backend.ini
+    owner=root
+    group=root
+    mode=0644

@@ -1,6 +1,7 @@
 # Inventory of all virtual machines
 
 ci ansible_ssh_host=192.168.168.10
+backend ansible_ssh_host=192.168.168.20
 
 [devel:vars]
 ansible_ssh_user=vagrant

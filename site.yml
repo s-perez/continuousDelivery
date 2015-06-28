@@ -5,4 +5,8 @@
 
 - hosts: ci
   roles:
-    -  ci
+    - ci
+
+- hosts: backend
+  roles:
+    - backend

@@ -6,6 +6,7 @@ Vagrant.configure("2") do |config|
   # See devel.hosts
   machines = [
     { :ip => "192.168.168.10", :name => "ci", :memory => 1024 },
+    { :ip => "192.168.168.20", :name => "backend", :memory => 1024 },
   ]
 
   config.vm.provision "ansible" do |ansible|

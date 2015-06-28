@@ -1,0 +1,20 @@
+[uwsgi]
+chdir = /srv/backend/src
+socket = 127.0.0.1:8000
+module = backend.wsgi
+processes = %(%k * 4)
+die-on-term = True
+master = True
+stats = 127.0.0.1:9000
+memory-report = True
+strict = True
+auto-procname = True
+procname-prefix = backend-
+daemonize = /srv/backend/log/backend.log
+logformat = %(addr) - %(user) [%(ltime)] "%(method) %(uri) %(proto)" %(status) %(size) "%(referer)" "%(uagent)" %(micros)
+
+req-logger = file:/srv/backend/log/backend_request.log
+
+{% for key, value in env.items() %}
+env = {{ key }}={{ value|replace("%", "%%") }}
+{% endfor %}
